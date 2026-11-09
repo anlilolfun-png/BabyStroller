@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Baby Stroller Monitor</title>
+<style>
+  body{font-family:Arial,sans-serif;background:#fff8e6;margin:0;padding:16px;color:#222}
+  .wrap{max-width:920px;margin:auto}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.08);transition: all 0.3s ease;opacity:0;box-sizing:border-box;}
+  .status-bar{height:auto;}
+  .card-temp{border-top:4px solid #81c7fa;}
+  .card-hum{border-top:4px solid #1565c0;}
+  .card-temp:hover{
+    transform: translateY(-5px);
+    box-shadow:0 8px 20px #81c7fa50;
+    background:#f8fcff;
+  }
+  .card-hum:hover{
+    transform: translateY(-5px);
+    box-shadow:0 8px 20px #1565c050;
+    background:#f3f8ff;
+  }
+  .big{font-size:2.4em;font-weight:bold}
+  .temp-text{
+    background: linear-gradient(90deg,#59b3e8,#81c7fa);
+    -webkit-background-clip:text;
+    color:transparent;
+  }
+  .hum-text{
+    background: linear-gradient(90deg,#1565c0,#4285d4);
+    -webkit-background-clip:text;
+    color:transparent;
+  }
+  .lbl{color:#666;font-size:.9em}
+  .pill{display:inline-block;padding:3px 12px;border-radius:20px;font-weight:bold;background:linear-gradient(135deg,#e8edf3,#dce3ec)}
+  .ok{background:linear-gradient(135deg,#d4f7dc,#bcefd0)}
+  .warn{background:linear-gradient(135deg,#fde9a8,#fbdc78)}
+  .danger{background:linear-gradient(135deg,#ffd6d6,#f8b4b4)}
+  @keyframes breathe{
+    0%{box-shadow: 0 0 0 0 rgba(231, 76, 60,0.4)}
+    70%{box-shadow: 0 0 0 10px rgba(231, 76, 60,0)}
+    100%{box-shadow: 0 0 0 0 rgba(231, 76, 60,0)}
+  }
+  #findBtn{background:#e74c3c;color:#fff;border:0;padding:14px 28px;border-radius:10px;font-size:1.1em;cursor:pointer;transition:0.2s;animation: breathe 2.2s infinite;}
+  #findBtn:hover{background:#c0392b}
+  #findBtn:active{transform:scale(.97)}
+  iframe{border:0;border-radius:8px;width:100%;height:260px;}
+  @keyframes fadeInUp{
+    from{opacity:0;transform:translateY(12px)}
+    to{opacity:1;transform:translateY(0)}
+  }
+  h2,.card{animation: fadeInUp 0.6s ease forwards;}
+  h2{animation-delay:0.1s}
+  .card:nth-child(2){animation-delay:0.2s}
+  .card:nth-child(3){animation-delay:0.3s}
+  .card:nth-child(4){animation-delay:0.4s}
+  .card:nth-child(5){animation-delay:0.5s}
+
+  /* ===== 新增告警提示框样式 ===== */
+  .alert-box {
+    border-radius:10px;
+    padding:14px;
+    margin-bottom:14px;
+    font-weight:bold;
+    font-size:1.05em;
+  }
+  .alert-normal {
+    background:#e8f5e9;
+    color:#2e7d32;
+  }
+  .alert-warning {
+    background:#fff3cd;
+    color:#856404;
+  }
+  .alert-danger {
+    background:#f8d7da;
+    color:#721c24;
+  }
+</style>
+<base target="_blank">
+</head>
+<body>
+<div class="wrap">
+  <h2>🍼 Smart Baby Stroller Monitor</h2>
+
+  <!-- ===== 新增告警文字区域 ===== -->
+  <div id="alertBox" class="alert-box alert-normal">✅ System Normal</div>
+
+  <div class="card status-bar" style="margin-bottom:12px">
+    System: <span class="pill" id="sysPill">--</span> &nbsp;
+    Hand: <span class="pill" id="handPill">--</span> &nbsp;
+    Seat-Belt: <span class="pill" id="beltPill">--</span> &nbsp;
+    Movement: <span class="pill" id="movePill">--</span> &nbsp;
+    Fan: <span class="pill" id="fanPill">--</span>
+    <span style="float:right;color:#888;font-size:.85em" id="updated"></span>
+  </div>
+
+  <div class="grid">
+    <div class="card card-temp"><div class="lbl">🌡 Cabin Temperature</div><div class="big temp-text"><span id="tempVal">--</span> °C</div></div>
+    <div class="card card-hum"><div class="lbl">💧 Cabin Humidity</div><div class="big hum-text"><span id="humVal">--</span> %</div></div>
+  </div>
+
+  <div class="card status-bar" style="margin-top:12px;text-align:center">
+    <button id="findBtn">🔔 Find My Stroller</button>
+    <div id="findMsg" style="margin-top:8px;color:#555"></div>
+  </div>
+
+  <div class="grid" style="margin-top:12px">
+    <div class="card card-temp">
+        <iframe src="https://thingspeak.com/channels/3549511/charts/1?bgcolor=%23fff8e6&color=%2381c7fa&days=1&dynamic=true&title=Temperature+%28%C2%B0C%29&axis_color=%239e9e9e&label_color=%23757575"></iframe>
+    </div>
+    <div class="card card-hum">
+        <iframe src="https://thingspeak.com/channels/3549511/charts/2?bgcolor=%23fff8e6&color=%231565c0&days=1&dynamic=true&title=Humidity+%28%25%29&axis_color=%239e9e9e&label_color=%23757575"></iframe>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== Thingspeak 参数，和你ESP32一致 ===== */
+const CHANNEL_ID = 3549511;
+const READ_KEY = "1732YE15SQ6YT2VL";
+const TALKBACK_ID = 58159;
+const TALKBACK_KEY = "4WTZJ4MUXDSD5Q47";
+
+/* DOM */
+const alertBox = document.getElementById("alertBox");
+const sysPill = document.getElementById("sysPill");
+const handPill = document.getElementById("handPill");
+const beltPill = document.getElementById("beltPill");
+const movePill = document.getElementById("movePill");
+const fanPill = document.getElementById("fanPill");
+const tempVal = document.getElementById("tempVal");
+const humVal = document.getElementById("humVal");
+const updated = document.getElementById("updated");
+const findBtn = document.getElementById("findBtn");
+const findMsg = document.getElementById("findMsg");
+
+/* 更新告警文字（核心新增逻辑） */
+function updateAlertText(data){
+  const sysActive = data.field3 == 1;
+  const handPresent = data.field4 == 1;
+  const rollaway = data.field5 == 1;
+  const beltFastened = data.field6 == 1;
+  const temp = parseFloat(data.field1);
+
+  let msgList = [];
+  let alertClass = "alert-normal";
+
+  if(!sysActive){
+    alertBox.className = "alert-box alert-normal";
+    alertBox.textContent = "✅ System Standby (No child detected)";
+    return;
+  }
+
+  // 判断各个告警
+  if(!beltFastened){
+    msgList.push("Seat belt unfastened!");
+  }
+  if(rollaway){
+    msgList.push("Stroller rolling away! Please grip handle.");
+  }
+  if(!isNaN(temp) && (temp > 38 || temp < 18)){
+    msgList.push("Temperature out of safe range!");
+    alertClass = "alert-danger";
+  }else if(msgList.length > 0){
+    alertClass = "alert-warning";
+  }
+
+  alertBox.className = "alert-box " + alertClass;
+  if(msgList.length === 0){
+    alertBox.textContent = "✅ System Normal";
+  }else{
+    alertBox.textContent = "⚠ WARNING: " + msgList.join(" ");
+  }
+}
+
+function refreshData(){
+  const url = `https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds/last.json?api_key=${READ_KEY}`;
+  fetch(url)
+  .then(res=>res.json())
+  .then(d=>{
+    if(!d || !d.field1) return;
+
+    const sysActive = d.field3 == 1;
+    const handPresent = d.field4 == 1;
+    const rollaway = d.field5 == 1;
+    const beltFastened = d.field6 == 1;
+    const fanOn = d.field7 == 1;
+
+    tempVal.textContent = isNaN(parseFloat(d.field1)) ? "--" : parseFloat(d.field1).toFixed(1);
+    humVal.textContent = isNaN(parseFloat(d.field2)) ? "--" : parseFloat(d.field2).toFixed(1);
+
+    sysPill.textContent = sysActive ? "Active" : "Standby";
+    sysPill.className = "pill " + (sysActive ? "ok" : "");
+
+    handPill.textContent = handPresent ? "Gripping" : "No hand";
+    handPill.className = "pill " + (handPresent ? "ok" : "warn");
+
+    beltPill.textContent = beltFastened ? "Fastened" : "UNFASTENED";
+    beltPill.className = "pill " + (beltFastened ? "ok" : "danger");
+
+    movePill.textContent = rollaway ? "⚠ ROLLING!" : "Stable";
+    movePill.className = "pill " + (rollaway ? "danger" : "ok");
+
+    fanPill.textContent = fanOn ? "ON" : "OFF";
+    fanPill.className = "pill " + (fanOn ? "ok" : "");
+
+    updated.textContent = "Updated: " + new Date(d.created_at).toLocaleString();
+
+    updateAlertText(d);
+  })
+  .catch(e=>{
+    console.log("fetch error",e);
+  })
+}
+
+// 发送 FIND 指令
+findBtn.onclick = async ()=>{
+  findMsg.textContent = "Sending FIND command...";
+  const url = `https://api.thingspeak.com/talkbacks/${TALKBACK_ID}/commands.json?api_key=${TALKBACK_KEY}&command_string=FIND`;
+  try{
+    const r = await fetch(url,{method:"POST"});
+    if(r.ok){
+      findMsg.textContent = "✅ Find command sent! ESP32 will beep up to 30s";
+    }else{
+      findMsg.textContent = "❌ Send failed";
+    }
+  }catch(err){
+    findMsg.textContent = "❌ Network error";
+  }
+  setTimeout(()=>findMsg.textContent="",3000);
+}
+
+refreshData();
+setInterval(refreshData, 20000); // 和ESP32上传间隔一致：20秒刷新网页
+</script>
+</body>
+</html>
